@@ -105,25 +105,29 @@ async def youtube_link(ctx, url: str):
         response_message += "```\n" # 코드 블록 시작
         
         if start_dt_kst:
-            response_message += f"방송 시작: {start_dt_kst.strftime('%Y/%m/%d %H:%M')}\n"
+            response_message += f"{start_dt_kst.strftime('%m/%d')}\n"
+            response_message += f"방송 시작 {start_dt_kst.strftime('%H시 %M분 %S초 (%m/%d)')}\n"
         else:
             response_message += "방송 시작: 정보 없음\n"
 
         if end_dt_kst:
-            response_message += f"방송 종료: {end_dt_kst.strftime('%Y/%m/%d %H:%M')}\n"
+            response_message += f"방송 종료 {end_dt_kst.strftime('%H시 %M분 %S초 (%m/%d)')}\n"
         elif start_dt_kst and not end_dt_kst:
             response_message += "방송 종료: 현재 라이브 중\n"
         else:
             response_message += "방송 종료: 정보 없음\n"
 
+        response_message += "\n" # 빈 줄 추가
+
         if total_duration:
             total_seconds = int(total_duration.total_seconds())
             hours = total_seconds // 3600
             minutes = (total_seconds % 3600) // 60
+            seconds = total_seconds % 60 # 초 단위 계산 추가
             
-            response_message += f"총 방송시간: {hours}시간 {minutes}분\n"
+            response_message += f"총 방송 시간 {hours}시간 {minutes}분 {seconds}초\n"
         else:
-            response_message += "총 방송시간: 계산 불가 (라이브 중이거나 정보 부족)\n"
+            response_message += "총 방송 시간: 계산 불가 (라이브 중이거나 정보 부족)\n"
         
         response_message += "```" # 코드 블록 끝
 
