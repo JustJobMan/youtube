@@ -1,0 +1,4 @@
+discord.py
+google-api-python-client
+python-dotenv # 로컬 테스트용이지만, 혹시 모르니 포함합니다.
+pytz
