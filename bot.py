@@ -1,38 +1,30 @@
 import os
 import discord
 from discord.ext import commands
-from dotenv import load_dotenv # Render 배포 시에는 직접 사용되지 않지만, 로컬 테스트를 위해 유지합니다.
+from dotenv import load_dotenv
 import googleapiclient.discovery
 from datetime import datetime, timedelta
 import re
-import pytz # 시간대 변환을 위해 추가
+import pytz
 
-# .env 파일에서 환경 변수 로드 (로컬 테스트용)
-# Render에서는 이 부분이 필요 없습니다. 환경 변수를 직접 설정합니다.
 if os.path.exists('config.env'):
     load_dotenv('config.env')
 
-# 환경 변수에서 토큰과 API 키 불러오기 (Render에서는 여기서 직접 불러와집니다)
 DISCORD_BOT_TOKEN = os.getenv('DISCORD_BOT_TOKEN')
 YOUTUBE_API_KEY = os.getenv('YOUTUBE_API_KEY')
 
-# 디스코드 인텐트 설정 (메시지 내용을 읽기 위해 필요)
 intents = discord.Intents.default()
-intents.message_content = True # MESSAGE CONTENT INTENT 활성화
+intents.message_content = True
 
-# 봇 클라이언트 생성
 bot = commands.Bot(command_prefix='!', intents=intents)
 
-# 유튜브 API 서비스 빌드
 youtube = googleapiclient.discovery.build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
 
-# 봇이 준비되었을 때 실행되는 이벤트
 @bot.event
 async def on_ready():
     print(f'봇이 로그인되었습니다: {bot.user.name} (ID: {bot.user.id})')
     print('------')
 
-# !링크 명령어 처리: 유튜브 라이브 방송 시간 계산
 @bot.command(name='링크')
 async def youtube_link(ctx, url: str):
     """
@@ -42,7 +34,6 @@ async def youtube_link(ctx, url: str):
     await ctx.send("유튜브 라이브 정보를 가져오는 중입니다. 잠시만 기다려 주세요...")
 
     video_id = None
-    # 유튜브 링크에서 video ID 추출 (다양한 링크 형식 고려)
     match = re.search(r'(?:v=|youtu\.be/|live/)([a-zA-Z0-9_-]{11})(?:\?|&|$)', url)
     if match:
         video_id = match.group(1)
@@ -76,33 +67,29 @@ async def youtube_link(ctx, url: str):
         start_time_str = live_details.get('actualStartTime')
         end_time_str = live_details.get('actualEndTime')
 
-        korea_tz = pytz.timezone('Asia/Seoul') # 한국 시간대 설정
+        korea_tz = pytz.timezone('Asia/Seoul')
 
         start_dt_kst = None
         end_dt_kst = None
         total_duration = None
 
-        # 시작 시간 파싱 및 한국 시간으로 변환
         if start_time_str:
             start_dt_utc = datetime.fromisoformat(start_time_str.replace('Z', '+00:00'))
             start_dt_kst = start_dt_utc.astimezone(korea_tz)
 
-        # 종료 시간 파싱 및 한국 시간으로 변환
         if end_time_str:
             end_dt_utc = datetime.fromisoformat(end_time_str.replace('Z', '+00:00'))
             end_dt_kst = end_dt_utc.astimezone(korea_tz)
 
-        # 총 방송 시간 계산
         if start_dt_kst and end_dt_kst:
             total_duration = end_dt_kst - start_dt_kst
-        elif start_dt_kst and not end_dt_kst: # 현재 라이브 중인 경우
+        elif start_dt_kst and not end_dt_kst:
             current_dt_utc = datetime.now(pytz.utc)
             current_dt_kst = current_dt_utc.astimezone(korea_tz)
             total_duration = current_dt_kst - start_dt_kst
             
-        # 결과 메시지 생성
         response_message = f"**{title}** (채널: {channel_title})\n"
-        response_message += "```\n" # 코드 블록 시작
+        response_message += "```\n"
         
         if start_dt_kst:
             response_message += f"{start_dt_kst.strftime('%m/%d')}\n"
@@ -117,19 +104,19 @@ async def youtube_link(ctx, url: str):
         else:
             response_message += "방송 종료: 정보 없음\n"
 
-        response_message += "\n" # 빈 줄 추가
+        response_message += "\n"
 
         if total_duration:
             total_seconds = int(total_duration.total_seconds())
             hours = total_seconds // 3600
             minutes = (total_seconds % 3600) // 60
-            seconds = total_seconds % 60 # 초 단위 계산 추가
+            seconds = total_seconds % 60
             
             response_message += f"총 방송 시간 {hours}시간 {minutes}분 {seconds}초\n"
         else:
             response_message += "총 방송 시간: 계산 불가 (라이브 중이거나 정보 부족)\n"
         
-        response_message += "```" # 코드 블록 끝
+        response_message += "```"
 
         await ctx.send(response_message)
 
@@ -145,8 +132,6 @@ async def youtube_link(ctx, url: str):
         await ctx.send(f"오류가 발생했습니다: {e}")
         print(f"Error: {e}")
 
-
-# !채널 명령어 처리: 유튜브 채널 검색
 @bot.command(name='채널')
 async def youtube_channel_search(ctx, *, query: str):
     """
@@ -160,7 +145,7 @@ async def youtube_channel_search(ctx, *, query: str):
             part="snippet",
             type="channel",
             q=query,
-            maxResults=5 # 최대 5개 결과 반환
+            maxResults=5
         )
         response = request.execute()
 
@@ -177,7 +162,7 @@ async def youtube_channel_search(ctx, *, query: str):
             response_message += (
                 f"\n**{i+1}. {channel_title}**\n"
                 f"   - ID: `{channel_id}`\n"
-                f"   - 설명: {channel_description[:100]}...\n" # 설명이 길면 잘라냄
+                f"   - 설명: {channel_description[:100]}...\n"
                 f"   - 링크: https://www.youtube.com/channel/{channel_id}\n"
             )
         
@@ -195,58 +180,52 @@ async def youtube_channel_search(ctx, *, query: str):
         await ctx.send(f"오류가 발생했습니다: {e}")
         print(f"Error: {e}")
 
-# !트렌드 명령어 처리: 유튜브 인기/관련 동영상 검색 (귀신, 흉가)
+# !트렌드 명령어 처리: 유튜브 인기/관련 동영상 검색 (horror movie로 변경)
 @bot.command(name='트렌드')
 async def youtube_ghost_haunted_trend(ctx):
     """
-    유튜브에서 '귀신' 또는 '흉가' 관련 인기 동영상을 검색하고 조회수를 표시합니다.
+    유튜브에서 'horror movie' 관련 인기 동영상을 검색하고 조회수를 표시합니다.
     사용법: !트렌드
     """
-    await ctx.send("유튜브에서 '귀신' 또는 '흉가' 관련 인기 동영상을 검색 중입니다. 잠시만 기다려 주세요...")
+    await ctx.send("유튜브에서 'horror movie' 관련 인기 동영상을 검색 중입니다. 잠시만 기다려 주세요...")
 
     try:
-        # 1. '귀신' 또는 '흉가' 관련 동영상 검색
         search_request = youtube.search().list(
             part="snippet",
-            q="horror 흉가 귀신", # Keywords for ghost or haunted house
+            q="horror movie", # 'horror movie'로 변경
             type="video",
-            order="viewCount", # Order by view count for popularity/trend
-            maxResults=5 # Limit to top 5 results
+            order="viewCount",
+            maxResults=5
         )
         search_response = search_request.execute()
 
         videos = search_response.get('items', [])
         if not videos:
-            await ctx.send("'귀신' 또는 '흉가' 관련 인기 동영상을 찾을 수 없습니다.")
+            await ctx.send("'horror movie' 관련 인기 동영상을 찾을 수 없습니다.")
             return
 
         video_ids = [video['id']['videoId'] for video in videos]
 
-        # 2. 검색된 동영상들의 조회수 정보 가져오기
         videos_info_request = youtube.videos().list(
             part="statistics",
-            id=",".join(video_ids) # 콤마로 구분된 비디오 ID 문자열
+            id=",".join(video_ids)
         )
         videos_info_response = videos_info_request.execute()
 
-        # 조회수 정보를 딕셔너리로 저장 (ID -> 조회수)
         view_counts = {}
         for item in videos_info_response.get('items', []):
             video_id = item['id']
-            # 조회수가 없을 경우를 대비하여 기본값 0 설정
             view_count = item['statistics'].get('viewCount', '0')
-            view_counts[video_id] = int(view_count) # 정수로 변환하여 저장
+            view_counts[video_id] = int(view_count)
 
-        # 3. 결과 메시지 생성
-        response_message = "'귀신' 또는 '흉가' 관련 인기 동영상:\n"
+        response_message = "'horror movie' 관련 인기 동영상:\n"
         for i, video in enumerate(videos):
             video_id = video['id']['videoId']
             video_title = video['snippet']['title']
             channel_title = video['snippet']['channelTitle']
             
-            # 조회수 가져오기 (콤마 포맷팅)
             current_view_count = view_counts.get(video_id, 0)
-            formatted_view_count = f"{current_view_count:,}" # 콤마로 숫자 포맷팅
+            formatted_view_count = f"{current_view_count:,}"
 
             response_message += (
                 f"\n**{i+1}. {video_title}**\n"
@@ -269,7 +248,6 @@ async def youtube_ghost_haunted_trend(ctx):
         await ctx.send(f"오류가 발생했습니다: {e}")
         print(f"Error: {e}")
 
-# 봇 실행
 if __name__ == '__main__':
     if not DISCORD_BOT_TOKEN:
         print("오류: DISCORD_BOT_TOKEN이 설정되지 않았습니다. 환경 변수를 확인해주세요.")
