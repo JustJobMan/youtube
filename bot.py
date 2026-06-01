@@ -6,12 +6,15 @@ import googleapiclient.discovery
 from datetime import datetime, timedelta
 import re
 import pytz
+import aiohttp
+import time
 
 if os.path.exists('config.env'):
     load_dotenv('config.env')
 
 DISCORD_BOT_TOKEN = os.getenv('DISCORD_BOT_TOKEN')
 YOUTUBE_API_KEY = os.getenv('YOUTUBE_API_KEY')
+FIREBASE_URL = "https://notan-cb053-default-rtdb.firebaseio.com"
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -180,73 +183,29 @@ async def youtube_channel_search(ctx, *, query: str):
         await ctx.send(f"오류가 발생했습니다: {e}")
         print(f"Error: {e}")
 
-# !트렌드 명령어 처리: 유튜브 인기/관련 동영상 검색 (horror movie로 변경)
-@bot.command(name='트렌드')
-async def youtube_ghost_haunted_trend(ctx):
+@bot.command(name='공지')
+async def announce(ctx, *, message: str):
     """
-    유튜브에서 'horror movie' 관련 인기 동영상을 검색하고 조회수를 표시합니다.
-    사용법: !트렌드
+    OBS 오버레이 운세룰렛 위젯에 공지를 10초간 표시합니다.
+    사용법: !공지 [내용]
     """
-    await ctx.send("유튜브에서 'horror movie' 관련 인기 동영상을 검색 중입니다. 잠시만 기다려 주세요...")
-
     try:
-        search_request = youtube.search().list(
-            part="snippet",
-            q="horror movie", # 'horror movie'로 변경
-            type="video",
-            order="viewCount",
-            maxResults=5
-        )
-        search_response = search_request.execute()
-
-        videos = search_response.get('items', [])
-        if not videos:
-            await ctx.send("'horror movie' 관련 인기 동영상을 찾을 수 없습니다.")
-            return
-
-        video_ids = [video['id']['videoId'] for video in videos]
-
-        videos_info_request = youtube.videos().list(
-            part="statistics",
-            id=",".join(video_ids)
-        )
-        videos_info_response = videos_info_request.execute()
-
-        view_counts = {}
-        for item in videos_info_response.get('items', []):
-            video_id = item['id']
-            view_count = item['statistics'].get('viewCount', '0')
-            view_counts[video_id] = int(view_count)
-
-        response_message = "'horror movie' 관련 인기 동영상:\n"
-        for i, video in enumerate(videos):
-            video_id = video['id']['videoId']
-            video_title = video['snippet']['title']
-            channel_title = video['snippet']['channelTitle']
-            
-            current_view_count = view_counts.get(video_id, 0)
-            formatted_view_count = f"{current_view_count:,}"
-
-            response_message += (
-                f"\n**{i+1}. {video_title}**\n"
-                f"   - 채널: {channel_title}\n"
-                f"   - 조회수: {formatted_view_count}\n"
-                f"   - 링크: https://www.youtube.com/watch?v={video_id}\n"
-            )
-
-        await ctx.send(response_message)
-
-    except googleapiclient.errors.HttpError as e:
-        if e.resp.status == 403:
-            await ctx.send("유튜브 API 할당량 초과 또는 API 키에 문제가 있습니다. 잠시 후 다시 시도하거나 API 키를 확인해주세요.")
-        elif e.resp.status == 400:
-            await ctx.send("유튜브 API 요청이 잘못되었습니다. 검색어에 문제가 있을 수 있습니다.")
-        else:
-            await ctx.send(f"유튜브 API 호출 중 오류가 발생했습니다: {e}")
-        print(f"YouTube API Error: {e}")
+        async with aiohttp.ClientSession() as session:
+            data = {
+                "message": message,
+                "timestamp": int(time.time() * 1000)
+            }
+            async with session.put(
+                f"{FIREBASE_URL}/announcement.json",
+                json=data
+            ) as resp:
+                if resp.status == 200:
+                    await ctx.send(f"📢 공지 전송 완료: **{message}**")
+                else:
+                    await ctx.send(f"공지 전송 실패 (상태코드: {resp.status})")
     except Exception as e:
-        await ctx.send(f"오류가 발생했습니다: {e}")
-        print(f"Error: {e}")
+        await ctx.send(f"공지 전송 중 오류가 발생했습니다: {e}")
+        print(f"Announce Error: {e}")
 
 if __name__ == '__main__':
     if not DISCORD_BOT_TOKEN:
