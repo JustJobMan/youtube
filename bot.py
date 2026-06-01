@@ -28,12 +28,23 @@ async def on_ready():
     print(f'봇이 로그인되었습니다: {bot.user.name} (ID: {bot.user.id})')
     print('------')
 
+@bot.command(name='명령어')
+async def help_commands(ctx):
+    msg = (
+        "```\n"
+        "📋 사용 가능한 명령어\n"
+        "──────────────────────────────\n"
+        "!링크 [유튜브링크]\n"
+        "  → 유튜브 라이브 방송 시작/종료/총 방송시간 조회\n\n"
+        "!공지 [내용]\n"
+        "  → 방송 중 운세룰렛 칸에 공지 10초 송출\n"
+        "──────────────────────────────\n"
+        "```"
+    )
+    await ctx.send(msg)
+
 @bot.command(name='링크')
 async def youtube_link(ctx, url: str):
-    """
-    유튜브 라이브 링크를 입력하면 방송 시작/종료 시간 및 총 방송 시간을 알려줍니다.
-    사용법: !링크 [유튜브 라이브 링크주소]
-    """
     await ctx.send("유튜브 라이브 정보를 가져오는 중입니다. 잠시만 기다려 주세요...")
 
     video_id = None
@@ -90,10 +101,10 @@ async def youtube_link(ctx, url: str):
             current_dt_utc = datetime.now(pytz.utc)
             current_dt_kst = current_dt_utc.astimezone(korea_tz)
             total_duration = current_dt_kst - start_dt_kst
-            
+
         response_message = f"**{title}** (채널: {channel_title})\n"
         response_message += "```\n"
-        
+
         if start_dt_kst:
             response_message += f"{start_dt_kst.strftime('%m/%d')}\n"
             response_message += f"방송 시작 {start_dt_kst.strftime('%H시 %M분 %S초 (%m/%d)')}\n"
@@ -114,13 +125,11 @@ async def youtube_link(ctx, url: str):
             hours = total_seconds // 3600
             minutes = (total_seconds % 3600) // 60
             seconds = total_seconds % 60
-            
             response_message += f"총 방송 시간 {hours}시간 {minutes}분 {seconds}초\n"
         else:
             response_message += "총 방송 시간: 계산 불가 (라이브 중이거나 정보 부족)\n"
-        
-        response_message += "```"
 
+        response_message += "```"
         await ctx.send(response_message)
 
     except googleapiclient.errors.HttpError as e:
@@ -135,60 +144,8 @@ async def youtube_link(ctx, url: str):
         await ctx.send(f"오류가 발생했습니다: {e}")
         print(f"Error: {e}")
 
-@bot.command(name='채널')
-async def youtube_channel_search(ctx, *, query: str):
-    """
-    유튜브 채널을 검색합니다.
-    사용법: !채널 [검색어]
-    """
-    await ctx.send(f"'{query}'에 대한 유튜브 채널을 검색 중입니다. 잠시만 기다려 주세요...")
-
-    try:
-        request = youtube.search().list(
-            part="snippet",
-            type="channel",
-            q=query,
-            maxResults=5
-        )
-        response = request.execute()
-
-        channels = response.get('items', [])
-        if not channels:
-            await ctx.send(f"'{query}'에 해당하는 채널을 찾을 수 없습니다.")
-            return
-
-        response_message = f"'{query}'에 대한 검색 결과:\n"
-        for i, channel in enumerate(channels):
-            channel_id = channel['id']['channelId']
-            channel_title = channel['snippet']['title']
-            channel_description = channel['snippet']['description']
-            response_message += (
-                f"\n**{i+1}. {channel_title}**\n"
-                f"   - ID: `{channel_id}`\n"
-                f"   - 설명: {channel_description[:100]}...\n"
-                f"   - 링크: https://www.youtube.com/channel/{channel_id}\n"
-            )
-        
-        await ctx.send(response_message)
-
-    except googleapiclient.errors.HttpError as e:
-        if e.resp.status == 403:
-            await ctx.send("유튜브 API 할당량 초과 또는 API 키에 문제가 있습니다. 잠시 후 다시 시도하거나 API 키를 확인해주세요.")
-        elif e.resp.status == 400:
-            await ctx.send("유튜브 API 요청이 잘못되었습니다. 검색어가 유효한지 확인해주세요.")
-        else:
-            await ctx.send(f"유튜브 API 호출 중 오류가 발생했습니다: {e}")
-        print(f"YouTube API Error: {e}")
-    except Exception as e:
-        await ctx.send(f"오류가 발생했습니다: {e}")
-        print(f"Error: {e}")
-
 @bot.command(name='공지')
 async def announce(ctx, *, message: str):
-    """
-    OBS 오버레이 운세룰렛 위젯에 공지를 10초간 표시합니다.
-    사용법: !공지 [내용]
-    """
     try:
         async with aiohttp.ClientSession() as session:
             data = {
