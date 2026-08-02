@@ -16,6 +16,10 @@ DISCORD_BOT_TOKEN = os.getenv('DISCORD_BOT_TOKEN')
 YOUTUBE_API_KEY = os.getenv('YOUTUBE_API_KEY')
 FIREBASE_URL = "https://notan-cb053-default-rtdb.firebaseio.com"
 
+# 유튜브봇(naongbot) 워커의 노담/먹어 스텍 조회 API
+STACK_API_URL = os.getenv('STACK_API_URL', 'https://naongbot-worker.onrender.com/api/stack')
+STACK_API_KEY = os.getenv('STACK_API_KEY')  # config.env에 STACK_API_KEY=발급받은키 추가
+
 intents = discord.Intents.default()
 intents.message_content = True
 
@@ -23,10 +27,12 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 
 youtube = googleapiclient.discovery.build("youtube", "v3", developerKey=YOUTUBE_API_KEY)
 
+
 @bot.event
 async def on_ready():
     print(f'봇이 로그인되었습니다: {bot.user.name} (ID: {bot.user.id})')
     print('------')
+
 
 @bot.command(name='명령어')
 async def help_commands(ctx):
@@ -37,11 +43,16 @@ async def help_commands(ctx):
         "!링크 [유튜브링크]\n"
         "  → 유튜브 라이브 방송 시작/종료/총 방송시간 조회\n\n"
         "!공지 [내용]\n"
-        "  → 방송 중 운세룰렛 칸에 공지 10초 송출\n"
+        "  → 방송 중 운세룰렛 칸에 공지 10초 송출\n\n"
+        "!노담\n"
+        "  → 현재 노담 스텍/티끌 현황 조회\n\n"
+        "!먹어\n"
+        "  → 현재 먹어 스텍 현황 조회\n"
         "──────────────────────────────\n"
         "```"
     )
     await ctx.send(msg)
+
 
 @bot.command(name='링크')
 async def youtube_link(ctx, url: str):
@@ -144,6 +155,7 @@ async def youtube_link(ctx, url: str):
         await ctx.send(f"오류가 발생했습니다: {e}")
         print(f"Error: {e}")
 
+
 @bot.command(name='공지')
 async def announce(ctx, *, message: str):
     try:
@@ -163,6 +175,48 @@ async def announce(ctx, *, message: str):
     except Exception as e:
         await ctx.send(f"공지 전송 중 오류가 발생했습니다: {e}")
         print(f"Announce Error: {e}")
+
+
+async def fetch_stack_data():
+    """유튜브봇(naongbot) 워커의 /api/stack에서 노담/먹어 스텍 값을 가져옴."""
+    async with aiohttp.ClientSession() as session:
+        params = {"key": STACK_API_KEY} if STACK_API_KEY else {}
+        async with session.get(STACK_API_URL, params=params) as resp:
+            if resp.status != 200:
+                return None
+            return await resp.json()
+
+
+@bot.command(name='노담')
+async def nodam_command(ctx):
+    try:
+        data = await fetch_stack_data()
+        if data is None:
+            await ctx.send("노담 스텍 정보를 가져오지 못했습니다. 잠시 후 다시 시도해주세요.")
+            return
+        msg = (
+            f"현재 {data['stack']}스텍 "
+            f"{data['dustNodam']}노담티끌 "
+            f"{data['dustShield']}쉴드티끌 있어요"
+        )
+        await ctx.send(msg)
+    except Exception as e:
+        await ctx.send(f"노담 정보를 가져오는 중 오류가 발생했습니다: {e}")
+        print(f"Nodam Error: {e}")
+
+
+@bot.command(name='먹어')
+async def eat_command(ctx):
+    try:
+        data = await fetch_stack_data()
+        if data is None:
+            await ctx.send("먹어 스텍 정보를 가져오지 못했습니다. 잠시 후 다시 시도해주세요.")
+            return
+        await ctx.send(f"현재 먹어 스텍: {data['eatStack']}")
+    except Exception as e:
+        await ctx.send(f"먹어 스텍 정보를 가져오는 중 오류가 발생했습니다: {e}")
+        print(f"Eat Stack Error: {e}")
+
 
 if __name__ == '__main__':
     if not DISCORD_BOT_TOKEN:
